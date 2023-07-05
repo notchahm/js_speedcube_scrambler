@@ -1,0 +1,16 @@
+{
+  "name": "js_speedcube_scrambler",
+  "version": "1.0.0",
+  "description": "A module to generate directions for random scramble states for the 3x3 Rubik's cube",
+  "main": "cube.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint cube.js"
+  },
+  "author": "Chahm An",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^8.44.0",
+    "jest": "^29.0.0"
+  }
+}

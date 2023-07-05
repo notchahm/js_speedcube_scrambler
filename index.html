@@ -1,0 +1,109 @@
+<html>
+<script src="cube.js"></script>
+<script>
+var cube = new Cube();
+function draw_scramble(svg, cube)
+{
+	let corner_letter_position_map = {	'A':[155,0],'B':[255,0],'C':[255,100],'D':[155,100],
+										'E':[0,155],'F':[100,155],'G':[100,255],'H':[0,255],
+										'I':[155,155],'J':[255,155],'K':[255,255],'L':[155,255],
+										'M':[310,155],'N':[410,155],'O':[410,255],'P':[310,255],
+										'Q':[465,155],'R':[565,155],'S':[565,255],'T':[465,255],
+										'U':[155,310],'V':[255,310],'W':[255,410],'X':[155,410]};
+	let edge_letter_position_map = {	'A':[205,0],'B':[255,50],'C':[205,100],'D':[155,50],
+										'E':[50,155],'F':[100,205],'G':[50,255],'H':[0,205],
+										'I':[205,155],'J':[255,205],'K':[205,255],'L':[155,205],
+										'M':[360,155],'N':[410,205],'O':[360,255],'P':[310,205],
+										'Q':[515,155],'R':[565,205],'S':[515,255],'T':[465,205],
+										'U':[205,310],'V':[255,360],'W':[205,410],'X':[155,360]}
+	let center_position_map = {	'W':[205,50],'Y':[205,360],'O':[50,205],'R':[360,205], 'B':[515,205], 'G':[205,205]}
+	let color_map = { 'W': "white", 'Y': "yellow", 'O': "orange", "R": "red", 'B': "blue", 'G': "green"}
+	let corner_faces = cube.get_corner_faces();
+	let edge_faces = cube.get_edge_faces();
+	for (let face in center_position_map)
+	{
+		let position = center_position_map[face];
+		let color = color_map[face];
+		if (position)
+		{
+			let cube_rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			cube_rect.id = "center"+face;
+			cube_rect.setAttribute("x", position[0]);
+			cube_rect.setAttribute("y", position[1]);
+			cube_rect.setAttribute("width", 50);
+			cube_rect.setAttribute("height", 50);
+			cube_rect.setAttribute("style", "stroke:black; fill:" + color);
+			svg.appendChild(cube_rect);
+		}
+	}
+	for (let letter in corner_faces)
+	{
+		let position = corner_letter_position_map[letter];
+		let color = color_map[corner_faces[letter]];
+		if (position)
+		{
+			let cube_rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			cube_rect.id = "corner"+letter;
+			cube_rect.setAttribute("x", position[0]);
+			cube_rect.setAttribute("y", position[1]);
+			cube_rect.setAttribute("width", 50);
+			cube_rect.setAttribute("height", 50);
+			cube_rect.setAttribute("style", "stroke:black; fill:" + color);
+			svg.appendChild(cube_rect);
+		}
+	}
+	for (let letter in edge_faces)
+	{
+		let position = edge_letter_position_map[letter];
+		let color = color_map[edge_faces[letter]];
+		if (position)
+		{
+			let cube_rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			cube_rect.id = "edge"+letter;
+			cube_rect.setAttribute("x", position[0]);
+			cube_rect.setAttribute("y", position[1]);
+			cube_rect.setAttribute("width", 50);
+			cube_rect.setAttribute("height", 50);
+			cube_rect.setAttribute("style", "stroke:black; fill:" + color);
+			svg.appendChild(cube_rect);
+		}
+	}
+}
+
+function generate_scramble(draw_svg, solution_div)
+{
+    // Step 1. Generate random cube stae
+   	cube.scramble();
+    console.log(cube.to_2d_string());
+	draw_scramble(draw_svg, cube);
+    // Step 2. Solve from generated random state
+    let solve_result = cube.solve_async();
+    // Step 3. Reverse the moves of the solution to get back to scrabled state
+	solve_result.then( (solution) =>
+	{
+    	let scramble_string = cube.reverse_solution(solution);
+   		console.log(scramble_string);
+		solution_div.innerHTML = scramble_string;
+	});
+}
+
+window.addEventListener('DOMContentLoaded', () =>
+{
+	let scramble_button = document.createElement('button');
+	scramble_button.innerHTML = "Generate Scramble";
+	document.body.appendChild(scramble_button);
+	let scramble_text = document.createElement('div');
+	scramble_text.innerHTML = "";
+	document.body.appendChild(scramble_text);
+	let scramble_draw = document.createElementNS("http://www.w3.org/2000/svg", 'svg');
+	scramble_draw.style.height = "500px";
+	scramble_draw.style.width = "650px";
+	scramble_draw.setAttribute("viewBox", "0 0 650 500");
+	document.body.appendChild(scramble_draw);
+    scramble_button.addEventListener("click", async () => {
+		generate_scramble(scramble_draw, scramble_text);
+    });
+	generate_scramble(scramble_draw, scramble_text);
+});
+</script>
+</html>
