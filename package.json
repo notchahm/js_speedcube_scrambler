@@ -7,6 +7,11 @@
     "test": "jest",
     "lint": "eslint cube.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/notchahm/js_speedcube_scrambler"
+  },
+  "keywords": "Rubik's cube scrambler solver",
   "author": "Chahm An",
   "license": "ISC",
   "devDependencies": {

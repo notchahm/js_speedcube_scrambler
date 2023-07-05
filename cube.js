@@ -57,7 +57,8 @@ function load_buffer(url, key, bytes_per_value, cube)
 		else
 		{
 			let fs = require('fs');
-			let bytes = fs.readFileSync(url);
+			let path = __dirname + "/" + url;
+			let bytes = fs.readFileSync(path);
 			let array = null;
 			if (bytes_per_value == 1)
 			{
@@ -288,7 +289,7 @@ function Cube()
 
 	this.to_string = function()
 	{
-		//Print cube state as readable string
+		// Format cube state as readable string
 		let output_string = "";
 		for (let corner_index in this.corner_permutations)
 		{
@@ -302,6 +303,32 @@ function Cube()
 		return output_string
 	}
 
+	this.from_string = function(input_string)
+	{
+		// Parse cube state from input string
+		let lines = input_string.split(/\r?\n/);
+		let corners = lines[0].split(')');
+		for (let corner_index in corners)
+		{
+			if (corner_index < this.corner_permutations.length)
+			{
+				let fields = corners[corner_index].slice(1).split(',');
+				this.corner_permutations[corner_index] = fields[0];
+				this.corner_orientations[corner_index] = parseInt(fields[1]);
+			}
+		}
+		let edges = lines[1].split(')');
+		for (let edge_index in edges)
+		{
+			if (edge_index < this.edge_permutations.length)
+			{
+				let fields = edges[edge_index].slice(1).split(',');
+				this.edge_permutations[edge_index] = fields[0];
+				this.edge_orientations[edge_index] = parseInt(fields[1]);
+			}
+		}
+	}
+
 	this.get_corner_faces = function()
 	{
 		// Gets the corners of the current cube state by color value at face position in Spefz notation
@@ -310,6 +337,7 @@ function Cube()
 		{
 			let current_permutation = this.corner_permutations[corner_index];
 			let current_orientation = this.corner_orientations[corner_index];
+			
 			for (let twist_index = 0; twist_index < 3; twist_index++)
 			{
 				let face_letter = this.corner_face_map[corner_index][(twist_index + current_orientation)%3];
@@ -1145,17 +1173,17 @@ function Cube()
 		let cube = this;
 		// Step 1. Generate random cube state
 		let random_state = this.scramble();
+		let cube_as_string = this.to_string();
+		/*
 		console.log(random_state);
 		console.log(this.to_string());
 		console.log(this.to_2d_string());
+		*/
 		// Step 2. Solve from generated random state
-		let solve_result = this.solve_async();
-		solve_result.then( (solution) =>
-		{
-			// Step 3. Reverse the moves of the solution to get back to scrabled state
-			let scramble_string = cube.reverse_solution(solution);
-			console.log(scramble_string);
-		});
+		let solution = this.solve();
+		// Step 3. Reverse the moves of the solution to get back to scrabled state
+		let scramble_string = cube.reverse_solution(solution);
+		return [scramble_string, cube_as_string, random_state];
 	}
 
 }
@@ -1165,4 +1193,7 @@ if (typeof module !== 'undefined')
 	module.exports = Cube;
 }
 //var cube = new Cube();
-//cube.generate_scramble();
+//let [scramble, state] = cube.generate_scramble();
+//console.log(scramble);
+//console.log(state);
+

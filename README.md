@@ -15,13 +15,21 @@ This project aims to
 
 ## Using
 This javascript module can be used either by importing into a web page or running as a backend application through node.js.
-All of the basic functionality is available through a single import of ``cube.js``.
+Installation of the module is availabe through npm by executing the command ``npm i js_speedcube_scrambler``
+All of the basic functionality is available through a single import
 
 For frontend web applications, the simplest way to use it is importing via HTML ``<script src="cube.js">`` tag. See ``index.html`` as a working example of how it can be integrated into a web page.
 
-For backend web applications, simply ``require('cube');`` within a node.js script to import it as a module. See ``cube.test.js`` as an example.
+For backend web applications, simply ``require('js_speedcube_scrambler');`` within a node.js script to import it as a module. See ``node_example.js`` as an example.
 
-The future plan is to make this project available as an npm package. Until then, installation is a manual process of copying the source files to your project.
+
+A functional demo of a webpage with a simple 3x3 scramble generator is available [here](https://notchahm.github.io/js_speedcube_scrambler/)
+
+## Roadmap
+- Better lookup table caching
+- C++ webassembly implementation
+- 3D cube representation via WebGL
+- Other puzzles (other NxN, Skewb, etc)
 
 ## Contributing
-I'm a fan of both the coding community and the cubing community. Collaboration is welcome, just reach out to me through GitHub.
+I'm a fan of both the coding community and the cubing community. Collaboration is welcome, just reach out to me (notchahm) through GitHub.
