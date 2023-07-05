@@ -32,7 +32,7 @@ jobs:
           npm install -g eslint
 
       # Runs a set of commands using the runners shell
-      - name: Runs linting and CI tests
+      - name: Run linting and CI tests
         run: |
           npm run lint
           npm test
