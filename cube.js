@@ -1,15 +1,17 @@
 const CORNERS = ["WRG", "WGO", "WOB", "WBR", "YGR", "YOG", "YBO", "YRB"];
 const EDGES = ["WR", "WG", "WO", "WB", "YR", "YG", "YO", "YB", "GR", "GO", "BO", "BR"];
-const MOVES = ["U1", "U2", "U3", "R1", "R2", "R3", "F1", "F2", "F3", "D1", "D2", "D3", "L1", "L2", "L3", "B1", "B2", "B3"];
-const N_PERM_4 = 24;
+const MOVES = ["U1", "U2", "U'", "R1", "R2", "R'", "F1", "F2", "F'", "D1", "D2", "D'", "L1", "L2", "L'", "B1", "B2", "B'"];
+const N_PERM_4 = 24;			// number of permutations for 4 items (4!)
 const N_MOVE = 18;				// number of possible face moves
 const N_TWIST = 2187;			// 3^7 possible corner orientations in phase 1
 const N_FLIP = 2048;			// 2^11 possible edge orientations in phase 1
 const N_UD_EDGES = 40320;       // 8! permutations of the edges in the U-face and D-face in phase 2
-const SOLVED = 0;
+const SOLVED = 0;				// For most coordinates, 0 is the conventional value for the solved state
 
 function is_browser()
 {
+	// An imperfect but simple heuristic check to see whether the code is running in a browser environment or not
+	// This is useful for deciding whether to run browser-specific code vs nodejs specific code
 	try
 	{
 		return this===window;
@@ -22,6 +24,7 @@ function is_browser()
 
 function load_buffer(url, key, bytes_per_value, cube)
 {
+	// loads values from an external binary file into a ArrayBuffer, useful for preloading lookup tables
 	return new Promise(function(resolve, reject)
 	{
 		if (is_browser() == true)
@@ -183,74 +186,160 @@ function Cube()
 		return s;
 	}
 
-	this.corner_multiply = function(other_cube)
+	function shift_array_forward(array, begin_pos, end_pos)
+	{
+		//Shifts values in the array one position forward, from begin_pos to end_pos
+		// with the value at end_pos cycling back to begin_pos
+		let swap_buffer = array[end_pos];
+		for (let index = end_pos; index >= begin_pos; index--)
+		{
+			array[index] = array[index-1];
+		}
+		array[begin_pos] = swap_buffer;
+	}
+
+	function shift_array_backward(array, begin_pos, end_pos)
+	{
+		//Shifts values in the array one position backward, from end_pos to begin_pos
+		// with the value at begin_pos cycling back to end_pos
+		let swap_buffer = array[begin_pos];
+		for (let index = begin_pos; index <= end_pos; index++)
+		{
+			array[index] = array[index+1];
+		}
+		array[end_pos] = swap_buffer;
+	}
+
+	this.corner_multiply = function(corner_permutation_map, corner_orientation_map)
 	{
 		// Multiply this Cube object with another cube, restricted to the corners. Does not change other_cube.
 		let new_corner_orientations = [];
 		let new_corner_permutations = [];
-		let ori = 0;
+		let new_orientation = 0;
 		for (let corner_index in CORNERS)
 		{
-			new_corner_permutations.push(this.corner_permutations[other_cube.corner_permutations[corner_index]]);
-			let ori_a = this.corner_orientations[other_cube.corner_permutations[corner_index]];
-			let ori_b = other_cube.corner_orientations[corner_index];
+			let new_index = corner_permutation_map[corner_index];
+			new_corner_permutations.push(this.corner_permutations[new_index]);
+			let ori_a = this.corner_orientations[new_index];
+			let ori_b = corner_orientation_map[corner_index];
 			if (ori_a < 3 && ori_b < 3)  // two regular cubes
 			{
-				ori = ori_a + ori_b;
-				if (ori >= 3)
+				new_orientation = ori_a + ori_b;
+				if (new_orientation >= 3)
 				{
-					ori -= 3;
+					new_orientation -= 3;
 				}
 			}
 			else if (ori_a < 3 <= ori_b)  // cube b is in a mirrored state
 			{
-				ori = ori_a + ori_b;
-				if (ori >= 6)
+				new_orientation = ori_a + ori_b;
+				if (new_orientation >= 6)
 				{
-					ori -= 3;  // the composition also is in a mirrored state
+					new_orientation -= 3;  // the composition also is in a mirrored state
 				}
 			}
 			else if (ori_a >= 3 > ori_b)  // cube a is in a mirrored state
 			{
-				ori = ori_a - ori_b;
-				if (ori < 3)
+				new_orientation = ori_a - ori_b;
+				if (new_orientation < 3)
 				{
-					ori += 3;  // the composition is a mirrored cube
+					new_orientation += 3;  // the composition is a mirrored cube
 				}
 			}
 			else if (ori_a >= 3 && ori_b >= 3)  // if both cubes are in mirrored states
 			{
-				ori = ori_a - ori_b;
-				if (ori < 0)
+				new_orientation = ori_a - ori_b;
+				if (new_orientation < 0)
 				{
-					ori += 3;  // the composition is a regular cube
+					new_orientation += 3;  // the composition is a regular cube
 				}
 			}
-			new_corner_orientations.push(ori);
+			new_corner_orientations.push(new_orientation);
 		}
 		this.corner_permutations = new_corner_permutations;
 		this.corner_orientations = new_corner_orientations;
 	}
 
-	this.edge_multiply = function(other_cube)
+	this.edge_multiply = function(edge_permutation_map, edge_orientation_map)
 	{
 		// Multiply this Cube object with another cube, restricted to the edges. Does not change other_cube.
 		let new_edge_permutations = [];
 		let new_edge_orientations = [];
 		for (let edge_index in EDGES)
 		{
-			new_edge_permutations.push(this.edge_permutations[other_cube.edge_permutations[edge_index]]);
-			new_edge_orientations.push((other_cube.edge_orientations[edge_index] + this.edge_orientations[other_cube.edge_orientations[edge_index]]) % 2);
+			let new_index = edge_permutation_map[edge_index];
+			new_edge_permutations.push(this.edge_permutations[new_index]);
+			new_edge_orientations.push((edge_orientation_map[edge_index] + this.edge_orientations[new_index]) % 2);
 		}
 		this.edge_permutations = new_edge_permutations;
 		this.edge_orientations = new_edge_orientations;
 	}
 
-	this.multiply = function(other_cube)
+	this.multiply = function(corner_permutation_map, corner_orientation_map, edge_permutation_map, edge_orientation_map)
 	{
 		// Multiply this Cube object with another cube. Does not change other_cube.
-		this.corner_multiply(other_cube);
-		this.edge_multiply(other_cube);
+		this.corner_multiply(corner_permutation_map, corner_orientation_map);
+		this.edge_multiply(edge_permutation_map, edge_orientation_map);
+	}
+
+	this.get_move_string_from_index = function(move_index)
+	{
+		return MOVES[move_index];
+	}
+
+	this.apply_move = function(move)
+	{
+		// Updates the cube state to apply any changes caused by rotating one face
+		// Valid moves are "U","U2","U'","R","R2","R'","F","F2","F'","D","D2","D'","L","L2","L'","B","B2","B'"
+		let corner_permutation_map = [0, 1, 2, 3, 4, 5, 6, 7];
+		let corner_orientation_map = [0, 0, 0, 0, 0, 0, 0, 0];
+		let edge_permutation_map = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+		let edge_orientation_map = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+		if (move[0] == 'U')	// A U move only rotates the permutation of the top 4 edges and corners
+		{					// Orientation of all pieces are not effected
+			corner_permutation_map = [3, 0, 1, 2, 4, 5, 6, 7];
+			edge_permutation_map = [3, 0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11];
+		}
+		else if (move[0] == 'R')	// An R move affects the right for edges and corners
+		{							// Edge orientation is not changed by
+			corner_permutation_map = [4, 1, 2, 0, 7, 5, 6, 3];
+			corner_orientation_map = [2, 0, 0, 1, 1, 0, 0, 2];
+			edge_permutation_map = [8, 1, 2, 3, 11, 5, 6, 7, 4, 9, 10, 0];
+		}
+		else if (move[0] == 'F')
+		{
+			corner_permutation_map = [1, 5, 2, 3, 0, 4, 6, 7];
+			corner_orientation_map = [1, 2, 0, 0, 2, 1, 0, 0];
+			edge_permutation_map = [0, 9, 2, 3, 4, 8, 6, 7, 1, 5, 10, 11];
+			edge_orientation_map = [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0];
+		}
+		else if (move[0] == 'D')
+		{
+			corner_permutation_map = [0, 1, 2, 3, 5, 6, 7, 4];
+			edge_permutation_map = [0, 1, 2, 3, 5, 6, 7, 4, 8, 9, 10, 11];
+		}
+		else if (move[0] == 'L')
+		{
+			corner_permutation_map = [0, 2, 6, 3, 4, 1, 5, 7];
+			corner_orientation_map = [0, 1, 2, 0, 0, 2, 1, 0];
+			edge_permutation_map = [0, 1, 10, 3, 4, 5, 9, 7, 8, 2, 6, 11];
+		}
+		else if (move[0] == 'B')
+		{
+			corner_permutation_map = [0, 1, 3, 7, 4, 5, 2, 6];
+			corner_orientation_map = [0, 0, 1, 2, 0, 0, 2, 1];
+			edge_permutation_map = [0, 1, 2, 11, 4, 5, 6, 10, 8, 9, 3, 7];
+			edge_orientation_map = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1];
+		}
+		this.multiply(corner_permutation_map, corner_orientation_map, edge_permutation_map, edge_orientation_map);
+		if (move[1] == "2" || move[1] == "'")
+		{
+			this.multiply(corner_permutation_map, corner_orientation_map, edge_permutation_map, edge_orientation_map);
+		}
+		if (move[1] == "'")
+		{
+			this.multiply(corner_permutation_map, corner_orientation_map, edge_permutation_map, edge_orientation_map);
+		}
 	}
 
 	this.corner_parity = function()
@@ -373,7 +462,7 @@ function Cube()
 		output_string += "   " + edge_faces['D'] + "W" + edge_faces['B'] + "\n";
 		output_string += "   " + corner_faces['D'] + edge_faces['C'] + corner_faces['C'] + "\n";
 		output_string += corner_faces['E'] + edge_faces['E'] + corner_faces['F'] + corner_faces['I'] + edge_faces['I'] + corner_faces['J'] + corner_faces['M'] + edge_faces['M'] + corner_faces['N'] + corner_faces['Q'] + edge_faces['Q'] + corner_faces['R'] + "\n";
-		output_string += edge_faces['H'] + "O" + edge_faces['F'] + edge_faces['L'] + "G" + edge_faces['J'] + edge_faces['P'] + "R" + edge_faces['N'] + edge_faces['T'] + "B" + edge_faces['S'] + "\n";
+		output_string += edge_faces['H'] + "O" + edge_faces['F'] + edge_faces['L'] + "G" + edge_faces['J'] + edge_faces['P'] + "R" + edge_faces['N'] + edge_faces['T'] + "B" + edge_faces['R'] + "\n";
 		output_string += corner_faces['H'] + edge_faces['G'] + corner_faces['G'] + corner_faces['L'] + edge_faces['K'] + corner_faces['K'] + corner_faces['P'] + edge_faces['O'] + corner_faces['O'] + corner_faces['T'] + edge_faces['S'] + corner_faces['S'] + "\n";
 		output_string += "   " + corner_faces['U'] + edge_faces['U'] + corner_faces['V'] + "\n";
 		output_string += "   " + edge_faces['X'] + "Y" + edge_faces['V'] + "\n";
@@ -457,6 +546,7 @@ function Cube()
 
 	this.set_slice = function(slice_index)
 	{
+		// Sets the location of the UD-slice edges FR,FL,BL and BR in arbitrary order
 		let slice_edges = EDGES.slice(8,12);
 		let other_edge = EDGES.slice(0,8);
 		let coordinate = slice_index;  // Location
@@ -518,30 +608,6 @@ function Cube()
 			slice_b = (edge_index + 1)*slice_b + num_rotations;
 		}
 		return 24*slice_a + slice_b;
-	}
-
-	function shift_array_forward(array, begin_pos, end_pos)
-	{
-		//Shifts values in the array one position forward, from begin_pos to end_pos
-		// with the value at end_pos cycling back to begin_pos
-		let swap_buffer = array[end_pos];
-		for (let index = end_pos; index >= begin_pos; index--)
-		{
-			array[index] = array[index-1];
-		}
-		array[begin_pos] = swap_buffer;
-	}
-
-	function shift_array_backward(array, begin_pos, end_pos)
-	{
-		//Shifts values in the array one position backward, from end_pos to begin_pos
-		// with the value at begin_pos cycling back to end_pos
-		let swap_buffer = array[begin_pos];
-		for (let index = begin_pos; index <= end_pos; index++)
-		{
-			array[index] = array[index+1];
-		}
-		array[end_pos] = swap_buffer;
 	}
 
 	this.set_edges = function(permutation_index)
@@ -766,27 +832,37 @@ function Cube()
 		//  An odd number of edge swaps is only possible if there is also an odd number of corner swaps
 		if (this.edge_parity() != this.corner_parity())
 		{
-			console.log("edge_parity != corner_parity");
+			console.log("Invalid cube: edge_parity != corner_parity");
 			return false;
 		}
 
 		return true;
 	}
 
-	this.get_flipslice_twist_depth3 = function(index)
+	this.get_flip_slice_twist_depth3 = function(twist, flip, slice)
 	{
 		//Returns *exactly* the number of moves % 3 to solve phase 1 of a cube with given index
-		let y = this.flipslice_twist_depth3[Math.floor(index / 16)];
-		y >>= (index % 16) * 2;
-		return y & 3;
+		let flipslice = N_FLIP * slice + flip;
+		let classidx = this.flipslice_class_index[flipslice];
+		let sym = this.flipslice_sym[flipslice];
+		let phase1_lookup_index = N_TWIST * classidx + this.twist_conj[(twist << 4) + sym];	// << 4 is equivalent to mult by 16, which is the number of D4H symmetries
+		// To conserve memory, each value is only uses 2 bits, so we have to do some bit shifting to get the appropriate value
+		// TODO: This could be implemented better if we used something other than Uint32 Array.
+		//       Also not really optimal to be using 2 bits (0-3) to store mod 3 values (0-2)
+		let lookup_value = this.flipslice_twist_depth3[Math.floor(phase1_lookup_index / 16)];
+		lookup_value >>= (phase1_lookup_index % 16) * 2;
+		return lookup_value & 3;	// & 3 applies a bitmask to only use the last two bits of the value after shifting
 	}
 
-	this.get_corners_ud_edges_depth3 = function(index)
+	this.get_corners_ud_edges_depth3 = function(corners, ud_edges)
 	{
 		//Returns *at least* the number of moves % 3 to solve phase 2 of a cube with given index
-		let y = this.corners_ud_edges_depth3[Math.floor(index / 16)];
-		y >>= (index % 16) * 2;
-		return y & 3;
+		let classidx = this.corner_class_index[corners];
+		let sym = this.corner_sym[corners];
+		let phase2_lookup_index = N_UD_EDGES * classidx + this.ud_edges_conj[(ud_edges << 4) + sym];	 // << 4 is equivalent to mult by 16, which is the number of D4H symmetries
+		let lookup_value = this.corners_ud_edges_depth3[Math.floor(phase2_lookup_index / 16)];
+		lookup_value >>= (phase2_lookup_index % 16) * 2;
+		return lookup_value & 3;	// & 3 applies a bitmask to only use the last two bits of the value after shifting
 	}
 
 	this.get_depth_phase1 = function()
@@ -795,10 +871,7 @@ function Cube()
 		let slice = Math.floor(this.get_slice_sorted() / N_PERM_4);
 		let flip = this.get_flip();
 		let twist = this.get_twist();
-		let flipslice = N_FLIP * slice + flip;
-		let classidx = this.flipslice_class_index[flipslice];
-		let sym = this.flipslice_sym[flipslice];
-		let depth_mod3 = this.get_flipslice_twist_depth3(N_TWIST * classidx + this.twist_conj[(twist << 4) + sym]);
+		let depth_mod3 = this.get_flip_slice_twist_depth3(twist, flip, slice);
 
 		//console.log(slice, flip, twist, flipslice, classidx, sym, depth_mod3);
 		let depth = 0;
@@ -813,10 +886,7 @@ function Cube()
 				let new_twist = this.twist_move[N_MOVE * twist + move_index];
 				let new_flip = this.flip_move[N_MOVE * flip + move_index];
 				let new_slice = Math.floor(this.slice_sorted_move[N_MOVE * slice * N_PERM_4 + move_index] / N_PERM_4);
-				let new_flipslice = N_FLIP * new_slice + new_flip;
-				let new_classidx = this.flipslice_class_index[new_flipslice];
-				let new_sym = this.flipslice_sym[new_flipslice];
-				let depth_after_move = this.get_flipslice_twist_depth3(N_TWIST * new_classidx + this.twist_conj[(new_twist << 4) + new_sym])
+				let depth_after_move = this.get_flip_slice_twist_depth3(new_twist, new_flip, new_slice);
 				//console.log(move_index, new_slice, new_flip, new_twist, new_flipslice, new_classidx, new_sym, depth_after_move, depth_mod3);
 				if (depth_after_move == depth_mod3 - 1)
 				{
@@ -836,11 +906,7 @@ function Cube()
 	{
 		//Get distance to subgroup where only the UD-slice edges may be permuted in their slice (only 24/2 = 12 possible
 		//ways due to overall even parity). This is a lower bound for the number of moves to solve phase 2.
-		let classidx = this.corner_class_index[corners];
-		let sym = this.corner_sym[corners];
-		//let ud_edges_shift_4 = ud_edges << 4;
-		//let ud_edges_conj = this.ud_edges_conj[(ud_edges << 4) + sym];
-		let depth_mod3 = this.get_corners_ud_edges_depth3(N_UD_EDGES * classidx + this.ud_edges_conj[(ud_edges << 4) + sym]);
+		let depth_mod3 = this.get_corners_ud_edges_depth3(corners, ud_edges);
 		if (depth_mod3 == 3)  // unfilled entry, depth >= 11
 		{
 			return 11;
@@ -856,13 +922,11 @@ function Cube()
 			for (let move_index = 0; move_index < MOVES.length; move_index++)
 			{
 				let move = MOVES[move_index];
-				if (move[0] == 'U' || move[0] == 'D' || move[1] == '2')	//U1, U2, U3, R2, F2, D1, D2, D3, L2, B2
+				if (move[0] == 'U' || move[0] == 'D' || move[1] == '2')	//U1, U2, U', R2, F2, D1, D2, D', L2, B2
 				{
 					let new_corners = this.corners_move[N_MOVE * corners + move_index];
 					let new_ud_edges = this.ud_edges_move[N_MOVE * ud_edges + move_index];
-					let new_classidx = this.corner_class_index[new_corners];
-					let sym = this.corner_sym[new_corners];
-					let new_depth = this.get_corners_ud_edges_depth3(N_UD_EDGES * new_classidx + this.ud_edges_conj[(new_ud_edges << 4) + sym])
+					let new_depth = this.get_corners_ud_edges_depth3(new_corners, new_ud_edges)
 					//console.log("phase2 move", move, new_corners, ud_edges1, classidx1, sym, new_depth);
 					if (new_depth == depth_mod3 - 1)
 					{
@@ -880,6 +944,7 @@ function Cube()
 
 	this.search = function(flip, twist, slice_sorted, dist, togo_phase1)
 	{
+		// Called from solve() to find moves that reduce the distance to solved state
 		if (this.phase2_done)  // solution already found
 		{
 			return;
@@ -896,7 +961,7 @@ function Cube()
 			}
 
 			let corners = 0;
-			if (last_move[1] == "3" && last_move != "U" && last_move != "D") //[Move.R3, Move.F3, Move.L3, Move.B3]  # phase 1 solution come in pairs
+			if (last_move[1] == "'" && last_move != "U" && last_move != "D") //[Move.R', Move.F', Move.L', Move.B']  # phase 1 solution come in pairs
 			{
 				corners = this.corners_move[18 * this.cornersave + last_move_index - 1];  // apply R2, F2, L2 ord B2 on last ph1 solution
 			}
@@ -969,10 +1034,11 @@ function Cube()
 				let twist_new = this.twist_move[18 * twist + move_index];
 				let slice_sorted_new = this.slice_sorted_move[18 * slice_sorted + move_index];
 
-				let flipslice = 2048 * Math.floor(slice_sorted_new / 24) + flip_new  // N_FLIP * (slice_sorted // N_PERM_4) + flip
-				let classidx = this.flipslice_class_index[flipslice];
-				let sym = this.flipslice_sym[flipslice];
-				let dist_new_mod3 = this.get_flipslice_twist_depth3(2187 * classidx + this.twist_conj[(twist_new << 4) + sym]);
+				//let flipslice = 2048 * Math.floor(slice_sorted_new / 24) + flip_new  // N_FLIP * (slice_sorted // N_PERM_4) + flip
+				//let classidx = this.flipslice_class_index[flipslice];
+				//let sym = this.flipslice_sym[flipslice];
+				//let dist_new_mod3 = this.get_flipslice_twist_depth3(2187 * classidx + this.twist_conj[(twist_new << 4) + sym]);
+				let dist_new_mod3 = this.get_flip_slice_twist_depth3(twist_new, flip_new, Math.floor(slice_sorted_new/N_PERM_4));
 				let dist_new = this.prune_distance[3 * dist + dist_new_mod3];
 				if (dist_new >= togo_phase1)  // impossible to reach subgroup H in togo_phase1 - 1 moves
 				{
@@ -988,6 +1054,7 @@ function Cube()
 
 	this.search_phase2 = function(corners, ud_edges, slice_sorted, dist, togo_phase2)
 	{
+		// Called from search() after phase 1 to find moves that reduce distance to solved state
 		if (togo_phase2 == 0 && slice_sorted == 0)
 		{
 			//self.lock.acquire()  # phase 2 solved, store solution
@@ -1019,7 +1086,7 @@ function Cube()
 			for (let move_index = 0; move_index < MOVES.length; move_index++)
 			{
 				let move = MOVES[move_index];
-				if (move[0] == 'U' || move[0] == 'D' || move[1] == '2')	//U1, U2, U3, R2, F2, D1, D2, D3, L2, B2
+				if (move[0] == 'U' || move[0] == 'D' || move[1] == '2')	//U1, U2, U', R2, F2, D1, D2, D', L2, B2
 				{
 
 					if (this.sofar_phase2.length > 0)
@@ -1047,9 +1114,7 @@ function Cube()
 					let ud_edges_new = this.ud_edges_move[18 * ud_edges + move_index];
 					let slice_sorted_new = this.slice_sorted_move[18 * slice_sorted + move_index];
 
-					let classidx = this.corner_class_index[corners_new];
-					let sym = this.corner_sym[corners_new];
-					let dist_new_mod3 = this.get_corners_ud_edges_depth3(40320 * classidx + this.ud_edges_conj[(ud_edges_new << 4) + sym]);
+					let dist_new_mod3 = this.get_corners_ud_edges_depth3(corners_new, ud_edges_new);
 					let dist_new = this.prune_distance[3 * dist + dist_new_mod3];
 					let corner_slice_depth = this.corner_slice_depth[24 * corners_new + slice_sorted_new];
 					//console.log("phase2 add", move, "dist", dist_new, "corner slice depth", corner_slice_depth, "togo", togo_phase2, "corners", corners_new, "slice_sorted", slice_sorted_new, slice_sorted);
@@ -1084,6 +1149,7 @@ function Cube()
 
 	this.reset_state = function()
 	{
+		// Resets the cube to default initial (solved) state
 		CORNERS.forEach((corner) => this.corner_permutations.push(corner));
 		CORNERS.forEach(() => this.corner_orientations.push(0));
 		EDGES.forEach((edge) => this.edge_permutations.push(edge));
@@ -1092,6 +1158,7 @@ function Cube()
 
 	this.reset_solutions = function()
 	{
+		// Clears out any stored solutions and resets member variables that track solve progress. Should be called before a new search
 		this.solutions = [];
 		this.shortest_length = [999];
 		this.phase2_done = false;
@@ -1099,6 +1166,7 @@ function Cube()
 
 	this.solve = function()
 	{
+		// Apply Kociemba's Two phase algorithm to find an efficient set of moves to return the cube to solved state
 		this.reset_solutions();
 		// TODO Use symmetry & inversion to divide & conquer search on multiple threads
 		/*
@@ -1132,8 +1200,8 @@ function Cube()
 
 	this.solve_async = async function()
 	{
+		// The above solve() function is fast, but involves a decent amount of computation. This is a non-blocking alternative that returns a promise
 		let cube = this;
-		//await cube.wait_until_ready();
 		this.solve_promise = new Promise( function(resolve) 
 		{
 			cube.call_when_ready(function ()
@@ -1147,6 +1215,7 @@ function Cube()
 
 	this.reverse_solution = function(solution)
 	{
+		// Called from generate_scramble() to construct a string describing the sequence of moves to reach the original puzzle state from solved
 		let scramble_string = "";
 		for (let move_index = solution.length-1; move_index >= 0; move_index--)
 		{
@@ -1155,11 +1224,11 @@ function Cube()
 				scramble_string += " ";
 			}
 			let move = MOVES[solution[move_index]];
-			if (move[1] == '3')
+			if (move[1] == "'")
 			{
 				move = move[0];
 			}
-			if (move[1] == '1')
+			if (move[1] == "1")
 			{
 				move = move[0] + "'";
 			}
@@ -1170,30 +1239,24 @@ function Cube()
 
 	this.generate_scramble = function()
 	{
-		let cube = this;
+		// Generates a sequence of moves that puts the cube in a random scrabled states
 		// Step 1. Generate random cube state
 		let random_state = this.scramble();
 		let cube_as_string = this.to_string();
-		/*
-		console.log(random_state);
-		console.log(this.to_string());
-		console.log(this.to_2d_string());
-		*/
 		// Step 2. Solve from generated random state
 		let solution = this.solve();
 		// Step 3. Reverse the moves of the solution to get back to scrabled state
-		let scramble_string = cube.reverse_solution(solution);
+		let scramble_string = this.reverse_solution(solution);
 		return [scramble_string, cube_as_string, random_state];
 	}
 
+	this.apply_moves = function(move_string)
+	{
+		console.log(move_string);
+	}
 }
 
 if (typeof module !== 'undefined')
 {
 	module.exports = Cube;
 }
-//var cube = new Cube();
-//let [scramble, state] = cube.generate_scramble();
-//console.log(scramble);
-//console.log(state);
-

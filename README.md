@@ -26,9 +26,9 @@ For backend web applications, simply ``require('js_speedcube_scrambler');`` with
 A functional demo of a webpage with a simple 3x3 scramble generator is available [here](https://notchahm.github.io/js_speedcube_scrambler/)
 
 ## Roadmap
-- Better lookup table caching
+- "Light" version that, sacrifice some processing speed & movecount to do more algorithmic solutions for domino reduction instead of relying on big lookup tables
+- Animated 3D cube representation via WebGL to visualize moves to execute scramble for beginners unfamiliar with notation
 - C++ webassembly implementation
-- 3D cube representation via WebGL
 - Other puzzles (other NxN, Skewb, etc)
 
 ## Contributing
